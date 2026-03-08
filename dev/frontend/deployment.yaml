@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: balo-cricket-frontend
+  namespace: balo-cricket
+  labels:
+    app: balo-cricket-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: balo-cricket-frontend
+  template:
+    metadata:
+      labels:
+        app: balo-cricket-frontend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: balo-cricket-frontend
+          image: ghcr.io/samoclay/balo-cricket-react-frontend-ui:latest
+          ports:
+            - containerPort: 80
+          env:
+            # URL used by the React app to reach the API.
+            # Matches the host defined in dev/ingress.yaml.
+            - name: REACT_APP_API_URL
+              value: "http://api.balo-cricket.local"
+          resources:
+            # Resource values are sized for local development (Docker Desktop).
+            # Increase based on measured usage before deploying to a shared environment.
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20

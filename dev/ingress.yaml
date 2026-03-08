@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: balo-cricket-ingress
+  namespace: balo-cricket
+spec:
+  ingressClassName: nginx
+  rules:
+    # Frontend: http://balo-cricket.local
+    - host: balo-cricket.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: balo-cricket-frontend
+                port:
+                  number: 80
+    # API: http://api.balo-cricket.local
+    - host: api.balo-cricket.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: balo-cricket-api
+                port:
+                  number: 8080
