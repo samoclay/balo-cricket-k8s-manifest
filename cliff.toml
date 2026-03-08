@@ -6,7 +6,6 @@
 #   feat      ✨  A new feature
 #   fix       🐛  A bug fix
 #   docs      📚  Documentation only changes
-#   helm      ⛵  Helm chart changes (custom type)
 #   ci        👷  CI/CD pipeline changes
 #   chore     🔧  Maintenance / housekeeping
 #   refactor  ♻️   A code change that neither fixes a bug nor adds a feature
@@ -57,7 +56,6 @@ commit_parsers = [
     { message = "^feat",     group = "✨ Features"       },
     { message = "^fix",      group = "🐛 Bug Fixes"      },
     { message = "^docs",     group = "📚 Documentation"  },
-    { message = "^helm",     group = "⛵ Helm Chart"      },
     { message = "^ci",       group = "👷 CI/CD"           },
     { message = "^chore",    group = "🔧 Chores"          },
     { message = "^refactor", group = "♻️ Refactors"        },

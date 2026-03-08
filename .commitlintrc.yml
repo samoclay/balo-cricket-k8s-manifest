@@ -8,14 +8,12 @@ extends:
   - "@commitlint/config-conventional"
 
 rules:
-  # Allow the custom 'helm' type alongside the standard set
   type-enum:
     - 2       # error (not warn)
     - always
     - - feat       # ✨ new feature
       - fix        # 🐛 bug fix
       - docs       # 📚 documentation
-      - helm       # ⛵ helm chart changes
       - ci         # 👷 CI/CD
       - chore      # 🔧 maintenance
       - refactor   # ♻️  refactor

@@ -1,15 +1,15 @@
 # 🏏 balo-cricket-k8s-manifest
 
-> One command to go from zero to a fully running Balo Cricket platform on your local Kubernetes cluster.
+> Deployment manifests and one-command local setup for the Balo Cricket platform.
 
-This repository holds all the Kubernetes / Helm manifests needed to run the two services that make up the **Balo Cricket** platform side-by-side in a local Docker Desktop cluster:
+This repository holds the **Kubernetes deployment manifests** and the **local cluster setup script** for the two services that make up Balo Cricket, deployed using a published Helm chart.
 
 | Service | Image | What it does |
 |---------|-------|--------------|
 | 🎨 **Frontend** | `ghcr.io/samoclay/balo-cricket-react-frontend-ui` | React UI served on port 80 |
 | ⚙️ **API** | `ghcr.io/samoclay/balo-cricket-api` | Backend REST API served on port 8080 |
 
-Both images are stored in the **GitHub Container Registry (GHCR)**. The chart defaults to `latest` for each image; you can pin any published version via `--set`.
+> 📦 **Helm chart**: The chart is maintained in a separate repository — [`samoclay/balo-cricket-helm-chart`](https://github.com/samoclay/balo-cricket-helm-chart). This repo consumes published chart releases from that repo.
 
 ---
 
@@ -35,8 +35,6 @@ Your browser
         both live in the  balo-cricket  namespace
 ```
 
-The **React frontend** calls the API using the `REACT_APP_API_URL` environment variable, which is set to `http://api.balo-cricket.local` by default — the same hostname the ingress exposes.
-
 ---
 
 ## 📁 Repository structure
@@ -44,30 +42,22 @@ The **React frontend** calls the API using the `REACT_APP_API_URL` environment v
 ```
 .
 ├── scripts/
-│   └── setup.sh                 ⭐ one-command local setup & deploy
+│   └── setup.sh          ⭐ one-command local setup & deploy
 │
-├── helm/
-│   └── balo-cricket/            🎯 Helm chart (deploy this!)
-│       ├── Chart.yaml           chart metadata & version
-│       ├── values.yaml          all tuneable defaults
-│       └── templates/           k8s resource templates
-│
-├── dev/                         📄 raw YAML manifests (reference only)
+├── dev/                   📄 raw YAML manifests (reference / direct kubectl apply)
 │   ├── namespace.yaml
 │   ├── secrets.yaml
 │   ├── ingress.yaml
 │   ├── frontend/
 │   └── api/
 │
-├── CHANGELOG.md                 📋 auto-generated from conventional commits
-├── cliff.toml                   ⚙️  git-cliff config (drives CHANGELOG)
-├── .commitlintrc.yml            📏 conventional commit rules for PRs
+├── CHANGELOG.md           📋 auto-generated from conventional commits
+├── cliff.toml             ⚙️  git-cliff config (drives CHANGELOG)
+├── .commitlintrc.yml      📏 conventional commit rules for PRs
 │
 └── .github/workflows/
-    ├── helm-test.yml            🧪 PR: lint + schema + image check
-    ├── chart-release.yml        🚀 master: publish chart + enrich release notes
-    ├── changelog.yml            📋 master: auto-update CHANGELOG.md
-    └── commitlint.yml           📏 PR: validate commit message format
+    ├── changelog.yml      📋 master: auto-update CHANGELOG.md
+    └── commitlint.yml     📏 PR: validate commit message format
 ```
 
 ---
@@ -80,13 +70,11 @@ cd balo-cricket-k8s-manifest
 ./scripts/setup.sh
 ```
 
-That's it. The script walks you through every step interactively. ☕ grab a coffee while it sets up.
+The script walks you through every step interactively. ☕ grab a coffee while it sets up.
 
 ---
 
 ## 🛠️ Prerequisites
-
-Before running the setup script you need these three tools installed:
 
 | Tool | Why | Install |
 |------|-----|---------|
@@ -104,7 +92,7 @@ Before running the setup script you need these three tools installed:
 
 ## 🔑 Secrets you'll need
 
-The setup script prompts you for these. If you prefer to pass them as environment variables (e.g. for scripted setups), set them before running:
+The setup script prompts you for these. If you prefer to pass them as environment variables:
 
 ```bash
 export GHCR_USER="your-github-username"
@@ -116,37 +104,24 @@ export API_KEY="my-api-key"
 
 ### 🐙 Creating a GitHub PAT for GHCR
 
-Both container images live in the **GitHub Container Registry** — your local Kubernetes cluster must be able to pull them. The cluster does this via an `imagePullSecret` (just like AWS ECS uses ECR credentials or EKS uses an ECR token).
+Both container images live in the **GitHub Container Registry** — your local Kubernetes cluster must pull them using an `imagePullSecret`.
 
 1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
 2. Click **Generate new token**
 3. Give it a name like `balo-cricket-k8s-pull`
-4. Tick only **`read:packages`** — that's all the cluster needs
+4. Tick only **`read:packages`**
 5. Copy the token — you'll only see it once
-
-The setup script takes this token and creates a Kubernetes secret called `ghcr-pull-secret` in the `balo-cricket` namespace. The Helm chart then tells every pod to use that secret when pulling images — exactly the same pattern as `imagePullSecrets` with ECR credentials on AWS.
-
-If you ever need to recreate it manually:
-
-```bash
-kubectl create secret docker-registry ghcr-pull-secret \
-  --namespace=balo-cricket \
-  --docker-server=ghcr.io \
-  --docker-username=<your-github-username> \
-  --docker-password=<your-github-pat> \
-  --docker-email=<your-email>
-```
 
 ---
 
-## 📦 Helm chart — using the published repository
+## 📦 Helm chart — finding and using published versions
 
-Every time a feature branch is merged into **master**, the CI pipeline automatically packages the chart and publishes it to the Helm repository hosted on **GitHub Pages**. The chart version is driven by the `version` field in `helm/balo-cricket/Chart.yaml`.
+The Helm chart is published from [`samoclay/balo-cricket-helm-chart`](https://github.com/samoclay/balo-cricket-helm-chart) and served via GitHub Pages.
 
 ### Add the Helm repo
 
 ```bash
-helm repo add balo-cricket https://samoclay.github.io/balo-cricket-k8s-manifest
+helm repo add balo-cricket https://samoclay.github.io/balo-cricket-helm-chart
 helm repo update
 ```
 
@@ -164,45 +139,26 @@ balo-cricket/balo-cricket   0.2.0           latest        Balo Cricket platform 
 balo-cricket/balo-cricket   0.1.0           latest        Balo Cricket platform — React frontend UI and ...
 ```
 
+Each published chart release on [`samoclay/balo-cricket-helm-chart`](https://github.com/samoclay/balo-cricket-helm-chart/releases) includes:
+
+- 📦 The exact **frontend and API image versions** bundled in that chart
+- 🎨 **Frontend release notes** from [`samoclay/balo-cricket-react-frontend-ui`](https://github.com/samoclay/balo-cricket-react-frontend-ui/releases)
+- ⚙️ **API release notes** from [`samoclay/balo-cricket-api`](https://github.com/samoclay/balo-cricket-api/releases)
+- 🔄 Chart-level changes since the previous version
+
 ### 🗺️ See which container images a chart version uses
 
 ```bash
-# Show the full default values for a specific chart version
 helm show values balo-cricket/balo-cricket --version 0.1.0
 ```
 
-Look for the `frontend.image` and `api.image` blocks — they tell you exactly which image repository and tag that chart version was built against:
-
-```yaml
-frontend:
-  image:
-    repository: ghcr.io/samoclay/balo-cricket-react-frontend-ui
-    tag: latest
-
-api:
-  image:
-    repository: ghcr.io/samoclay/balo-cricket-api
-    tag: latest
-```
-
-To pin specific image versions when installing:
-
-```bash
-helm install balo-cricket balo-cricket/balo-cricket \
-  --namespace balo-cricket \
-  --set frontend.image.tag=1.2.0 \
-  --set api.image.tag=2.0.1 \
-  --set api.secrets.jwtSecret=<your-jwt-secret> \
-  --set api.secrets.apiKey=<your-api-key>
-```
+Look for the `frontend.image` and `api.image` blocks.
 
 ---
 
 ## 🚀 Getting started — step by step
 
 ### Option 1 — 🤖 Automated (recommended)
-
-The setup script handles everything below in one go:
 
 ```bash
 ./scripts/setup.sh
@@ -211,7 +167,7 @@ The setup script handles everything below in one go:
 **Optional flags:**
 
 ```bash
-# Deploy a specific published chart version instead of the local chart
+# Deploy a specific published chart version
 ./scripts/setup.sh --chart-version 0.2.0
 
 # Preview all steps without making any changes
@@ -220,13 +176,9 @@ The setup script handles everything below in one go:
 
 ### Option 2 — 🔧 Manual steps
 
-If you prefer to understand each step or want more control:
-
 #### 1️⃣ Add local DNS entries
 
-Add these two lines to your hosts file so the ingress hostnames resolve to `localhost`:
-
-**macOS / Linux** — `/etc/hosts`  
+**macOS / Linux** — `/etc/hosts`
 **Windows** — `C:\Windows\System32\drivers\etc\hosts`
 
 ```
@@ -238,25 +190,17 @@ Add these two lines to your hosts file so the ingress hostnames resolve to `loca
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
-
-# Wait for it to be ready
 kubectl wait --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
   --timeout=90s
 ```
 
-> 💡 Check the [ingress-nginx releases page](https://github.com/kubernetes/ingress-nginx/releases) to confirm `v1.11.3` is still the latest stable version.
-
-#### 3️⃣ Create the namespace
+#### 3️⃣ Create the namespace and GHCR pull secret
 
 ```bash
 kubectl create namespace balo-cricket
-```
 
-#### 4️⃣ Create the GHCR pull secret
-
-```bash
 kubectl create secret docker-registry ghcr-pull-secret \
   --namespace=balo-cricket \
   --docker-server=ghcr.io \
@@ -265,30 +209,26 @@ kubectl create secret docker-registry ghcr-pull-secret \
   --docker-email=<your-email>
 ```
 
-#### 5️⃣ Deploy with Helm
+#### 4️⃣ Deploy with Helm
 
 ```bash
-# From the published Helm repo:
-helm install balo-cricket balo-cricket/balo-cricket \
-  --namespace balo-cricket \
-  --set api.secrets.jwtSecret=<your-jwt-secret> \
-  --set api.secrets.apiKey=<your-api-key>
+helm repo add balo-cricket https://samoclay.github.io/balo-cricket-helm-chart
+helm repo update
 
-# Or from the local chart in this repo:
-helm install balo-cricket ./helm/balo-cricket \
+helm install balo-cricket balo-cricket/balo-cricket \
   --namespace balo-cricket \
   --set api.secrets.jwtSecret=<your-jwt-secret> \
   --set api.secrets.apiKey=<your-api-key>
 ```
 
-#### 6️⃣ Verify
+#### 5️⃣ Verify
 
 ```bash
 kubectl get all -n balo-cricket
 kubectl get ingress -n balo-cricket
 ```
 
-#### 7️⃣ Open in your browser
+#### 6️⃣ Open in your browser
 
 | 🌐 Frontend | http://balo-cricket.local |
 |-------------|---------------------------|
@@ -296,11 +236,10 @@ kubectl get ingress -n balo-cricket
 
 ---
 
-## ♻️ Updating / upgrading
-
-To upgrade to a newer chart version or change any value, use `helm upgrade`:
+## ♻️ Upgrading
 
 ```bash
+helm repo update
 helm upgrade balo-cricket balo-cricket/balo-cricket \
   --namespace balo-cricket \
   --version 0.2.0 \
@@ -308,7 +247,7 @@ helm upgrade balo-cricket balo-cricket/balo-cricket \
   --set api.secrets.apiKey=<your-api-key>
 ```
 
-Or just re-run the setup script with `--chart-version`:
+Or re-run the setup script:
 
 ```bash
 ./scripts/setup.sh --chart-version 0.2.0
@@ -323,113 +262,49 @@ kubectl delete namespace balo-cricket
 
 ---
 
-## 🔄 CI / CD — how the chart is published
+## 📋 CHANGELOG.md vs GitHub Releases — what lives where
 
-Every push to `master` (i.e. every merged PR) triggers this pipeline:
-
-```
-Feature branch  ──► PR ──► master merge
-                     │              │
-                     ▼              ▼
-              On every PR:    On every master push:
-              ─────────────   ──────────────────────────────────
-              commitlint.yml  changelog.yml
-              → validates     → git-cliff reads conventional
-                all commit      commits → rewrites CHANGELOG.md
-                messages        → commits back to master
-
-              helm-test.yml   chart-release.yml
-              → helm lint     → if Chart.yaml version bumped:
-              → kubeconform     ① package chart .tgz
-                (k8s 1.28 +     ② create GitHub Release
-                 k8s 1.30)           balo-cricket-<ver>
-              → docker          ③ enrich release notes:
-                manifest            • bundled image versions
-                inspect             • upstream changelogs from
-                (both images)         balo-cricket-react-frontend-ui
-                                      balo-cricket-api
-                                ④ push index.yaml → gh-pages
-                                   (live Helm repo)
-```
-
-### ⬆️ Bumping the chart version
-
-When you want to publish a new chart release, bump `version` in `helm/balo-cricket/Chart.yaml` **before** merging:
-
-```yaml
-# helm/balo-cricket/Chart.yaml
-version: 0.2.0    # ← increment this (semantic versioning)
-```
-
-Commit it as:
-
-```bash
-git commit -m "helm: bump chart version to 0.2.0"
-```
-
-`chart-release.yml` is idempotent — it only creates a GitHub Release when it finds a version that doesn't already have one, so merges that don't touch the chart version are safe no-ops.
-
-### 🏷️ What a GitHub Release looks like
-
-Each chart release at `https://github.com/samoclay/balo-cricket-k8s-manifest/releases` automatically includes:
-
-- 📦 **Bundled image versions** — the exact frontend and API image tags this chart was built with
-- 🎨 **Frontend changelog** — release notes fetched live from `samoclay/balo-cricket-react-frontend-ui`
-- ⚙️ **API changelog** — release notes fetched live from `samoclay/balo-cricket-api`
-- 🔄 **Chart changes** — conventional commits since the previous chart tag
-
-This means every chart release is self-contained and tells you exactly what's inside — no digging through commit history needed.
-
-> 💡 **Why GitHub Releases instead of a RELEASE.md file?**  
-> GitHub Releases are versioned, searchable, and appear directly on the repo homepage.  
-> A `RELEASE.md` file would go stale between versions and only ever show one release at a time.  
-> Use `CHANGELOG.md` for the full commit history and GitHub Releases for user-facing per-version notes.
+| | CHANGELOG.md | GitHub Releases (chart repo) |
+|-|---|---|
+| **What it tracks** | Every conventional commit merged to `master` in *this* repo | Each versioned chart release |
+| **Who updates it** | `changelog.yml` workflow — auto-committed after every master merge | `chart-release.yml` in `balo-cricket-helm-chart` |
+| **Audience** | Contributors to this repo | Operators / end-users deploying the chart |
+| **Content** | Commit-level changes (features, fixes, CI changes) | Bundled image versions + upstream release notes |
 
 ---
 
 ## 📝 Contributing — Conventional Commits
 
-This project uses **[Conventional Commits](https://www.conventionalcommits.org/)** so that the changelog and release notes are generated automatically. Every commit must follow this format:
+Every commit must follow **[Conventional Commits](https://www.conventionalcommits.org/)**:
 
 ```
 <type>(<optional scope>): <short description in lowercase>
-
-[optional body]
-
-[optional footer — use BREAKING CHANGE: for breaking changes]
 ```
-
-### Commit types
 
 | Type | Emoji | When to use |
 |------|-------|-------------|
-| `feat` | ✨ | A new feature or user-facing capability |
+| `feat` | ✨ | A new feature or capability |
 | `fix` | 🐛 | A bug fix |
-| `docs` | 📚 | Documentation only changes |
-| `helm` | ⛵ | Helm chart changes — values, templates, Chart.yaml version bumps |
+| `docs` | 📚 | Documentation only |
 | `ci` | 👷 | CI/CD workflow changes |
-| `chore` | 🔧 | Maintenance, dependency bumps, housekeeping |
-| `refactor` | ♻️ | Code restructure with no behavior change |
+| `chore` | 🔧 | Maintenance, dependency bumps |
+| `refactor` | ♻️ | Code restructure, no behavior change |
 | `perf` | ⚡ | Performance improvements |
 | `test` | 🧪 | Adding or fixing tests |
 | `style` | 🎨 | Formatting / whitespace only |
 | `revert` | ⏪ | Reverts a previous commit |
 
-### Examples
+**Examples:**
 
 ```bash
-feat: add staging environment values overlay
-fix: correct readiness probe path for API container
-helm: bump chart version to 0.2.0
-docs: add AWS deployment section to README
-ci: add trivy image vulnerability scanning
+feat: add staging environment overlay
+fix: correct readiness probe path for API
+docs: update manual deployment steps in README
+ci: add CHANGELOG auto-update workflow
 chore: update NGINX Ingress Controller to v1.12.0
-feat!: rename balo-cricket namespace to cricket    # ⚠️ breaking change
 ```
 
-Breaking changes use `!` after the type and will be flagged prominently in the changelog and release notes.
-
-The `commitlint.yml` workflow validates every commit in a PR automatically — it will block the merge if any message doesn't follow the spec.
+The `commitlint.yml` workflow validates every commit in a PR automatically. On every master merge, `changelog.yml` regenerates `CHANGELOG.md` using [git-cliff](https://git-cliff.org/).
 
 ---
 
@@ -437,17 +312,18 @@ The `commitlint.yml` workflow validates every commit in a PR automatically — i
 
 | Symptom | Fix |
 |---------|-----|
-| `ImagePullBackOff` on pods | The `ghcr-pull-secret` is missing or has wrong credentials. Re-run `./scripts/setup.sh` or recreate the secret manually (see step 4 above). |
+| `ImagePullBackOff` on pods | The `ghcr-pull-secret` is missing or has wrong credentials. Re-run `./scripts/setup.sh` or recreate the secret manually. |
 | `curl: (6) Could not resolve host: balo-cricket.local` | The `/etc/hosts` entries are missing. Add them (the setup script does this with `sudo`). |
 | Ingress returns 404 | The NGINX Ingress Controller may still be starting. Run `kubectl get pods -n ingress-nginx` and wait for `Running`. |
 | `helm: command not found` | Install Helm 3: https://helm.sh/docs/intro/install/ |
-| `Error: INSTALLATION FAILED: cannot re-use a name that is still in use` | A previous release exists. Use `helm upgrade` instead of `helm install`, or run the setup script (it uses `helm upgrade --install`). |
+| `Error: INSTALLATION FAILED: cannot re-use a name that is still in use` | A previous release exists. Use `helm upgrade` instead of `helm install`, or re-run the setup script. |
+| Chart version not found | Run `helm repo update` to refresh the index, then `helm search repo balo-cricket --versions` to list what's available. |
 
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] 🏗️ AWS deployment manifests (`aws/` environment overlay)
+- [ ] 🏗️ AWS deployment overlay (`aws/` environment)
 - [ ] 🔐 Sealed Secrets or External Secrets Operator integration
 - [ ] 📊 Prometheus / Grafana monitoring stack
 - [ ] 🔄 Dependabot for automated image tag bumps

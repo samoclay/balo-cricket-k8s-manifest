@@ -4,15 +4,14 @@ name: Conventional Commits
 # Conventional Commits specification (https://www.conventionalcommits.org/).
 #
 # Rules are defined in .commitlintrc.yml at the repo root.
-# Recognised types: feat fix docs helm ci chore refactor perf test style revert
+# Recognised types: feat fix docs ci chore refactor perf test style revert
 #
 # Examples of valid commit messages:
-#   feat: add helm chart for local dev cluster
+#   feat: add staging environment overlay
 #   fix: correct ingress host annotation
-#   helm: bump chart version to 0.2.0
 #   docs: update getting started section in README
 #   ci: add kubeconform schema validation step
-#   chore: tidy up values.yaml comments
+#   chore: tidy up deployment YAML comments
 on:
   pull_request:
     types:
@@ -43,3 +42,11 @@ jobs:
           # Check every commit in the PR, not just the latest
           failOnWarnings: false
           helpURL: "https://www.conventionalcommits.org/"
+          # Ignore commits made before conventional commits was adopted in this repo
+          ignoreCommits: |
+            a171c2337288cf38d9dab86738322641ff086726
+            2df7e1e0ae9628eadd5e2854fe93ace1d12e352f
+            bd5600772de35950273479c8142c8ea57b692985
+            d54c276bdeea325cb421b34c761a6e7d0f4fff8a
+            3648d58fda5908c65b95092571255ee09b8e2939
+            bc9b7289ec3b9f59a6ef8b1616d21054220590d2

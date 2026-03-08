@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
 # setup.sh — Bootstrap and deploy the Balo Cricket platform to a local
-#             Kubernetes cluster (Docker Desktop).
+#             Kubernetes cluster (Docker Desktop) using the published Helm chart.
+#
+# The Helm chart lives in a separate repository:
+#   https://github.com/samoclay/balo-cricket-helm-chart
 #
 # Usage:
-#   ./scripts/setup.sh                    # interactive — prompts for secrets
-#   ./scripts/setup.sh --chart-version 0.2.0   # pin a specific published version
-#   ./scripts/setup.sh --dry-run          # print what would happen, no changes
+#   ./scripts/setup.sh                          # deploys latest chart version
+#   ./scripts/setup.sh --chart-version 0.2.0    # pin a specific published version
+#   ./scripts/setup.sh --dry-run                # print what would happen, no changes
 #
 # Environment variables (skip interactive prompts):
 #   GHCR_USER       GitHub username for GHCR pull secret
@@ -30,12 +33,13 @@ dryrun()  { echo -e "  ${YELLOW}[dry-run]${RESET} $*"; }
 # ── Defaults ──────────────────────────────────────────────────────────────────
 NAMESPACE="balo-cricket"
 RELEASE_NAME="balo-cricket"
-HELM_CHART_DIR="$(cd "$(dirname "$0")/.." && pwd)/helm/balo-cricket"
+HELM_REPO_NAME="balo-cricket"
+HELM_REPO_URL="https://samoclay.github.io/balo-cricket-helm-chart"
 INGRESS_VERSION="v1.11.3"
 INGRESS_DEPLOY_URL="https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-${INGRESS_VERSION}/deploy/static/provider/cloud/deploy.yaml"
 FRONTEND_HOST="balo-cricket.local"
 API_HOST="api.balo-cricket.local"
-CHART_VERSION=""   # empty = use local chart; set via --chart-version to use published
+CHART_VERSION=""   # empty = install latest published chart
 DRY_RUN=false
 
 # ── Argument parsing ───────────────────────────────────────────────────────────
@@ -46,8 +50,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       echo "Usage: $0 [--chart-version <ver>] [--dry-run]"
       echo ""
-      echo "  --chart-version <ver>   Deploy a published chart version from the Helm repo"
-      echo "                          (e.g. 0.2.0).  Omit to deploy from the local chart."
+      echo "  --chart-version <ver>   Deploy a specific published chart version (e.g. 0.2.0)."
+      echo "                          Omit to install the latest available version."
       echo "  --dry-run               Print what would happen without making any changes."
       echo ""
       echo "Environment variables:"
@@ -55,6 +59,11 @@ while [[ $# -gt 0 ]]; do
       echo "  GHCR_TOKEN   GitHub PAT with read:packages scope (skips prompt)"
       echo "  JWT_SECRET   API JWT secret (skips prompt)"
       echo "  API_KEY      API key (skips prompt)"
+      echo ""
+      echo "To browse available chart versions:"
+      echo "  helm repo add ${HELM_REPO_NAME} ${HELM_REPO_URL}"
+      echo "  helm repo update"
+      echo "  helm search repo ${HELM_REPO_NAME} --versions"
       exit 0 ;;
     *) error "Unknown argument: $1" ;;
   esac
@@ -156,7 +165,6 @@ else
 fi
 
 if [[ "${recreate:-y}" == "y" ]]; then
-  # Collect credentials
   if [[ -z "${GHCR_USER:-}" ]]; then
     echo -e "  ${CYAN}GitHub username (for GHCR pull):${RESET} \c"
     read -r GHCR_USER
@@ -222,36 +230,39 @@ done
 
 $UPDATED_HOSTS && success "/etc/hosts updated"
 
-# ── Step 8: Helm repo (if using a published version) ─────────────────────────
-if [[ -n "$CHART_VERSION" ]]; then
-  step "Adding Balo Cricket Helm repo"
+# ── Step 8: Add / update Helm repo ────────────────────────────────────────────
+step "Adding Balo Cricket Helm repo"
 
-  HELM_REPO_URL="https://samoclay.github.io/balo-cricket-k8s-manifest"
-
-  if helm repo list 2>/dev/null | grep -q "balo-cricket"; then
-    success "Helm repo 'balo-cricket' already added"
-    run helm repo update balo-cricket
-  else
-    run helm repo add balo-cricket "$HELM_REPO_URL"
-    run helm repo update
-  fi
-
-  CHART_REF="balo-cricket/balo-cricket"
-  VERSION_FLAG="--version ${CHART_VERSION}"
-  success "Will deploy published chart version ${CHART_VERSION}"
+if helm repo list 2>/dev/null | grep -q "^${HELM_REPO_NAME}"; then
+  success "Helm repo '${HELM_REPO_NAME}' already added"
+  run helm repo update "$HELM_REPO_NAME"
 else
-  step "Using local chart"
-  CHART_REF="$HELM_CHART_DIR"
-  VERSION_FLAG=""
-  info "Chart path: ${CHART_REF}"
+  run helm repo add "$HELM_REPO_NAME" "$HELM_REPO_URL"
+  run helm repo update
 fi
 
-# ── Step 9: Deploy / upgrade with Helm ───────────────────────────────────────
+# Show available versions so the operator knows what they're deploying
+if ! $DRY_RUN; then
+  echo ""
+  info "Available chart versions:"
+  helm search repo "${HELM_REPO_NAME}" --versions | head -10
+  echo ""
+fi
+
+# ── Step 9: Deploy / upgrade with Helm ────────────────────────────────────────
 step "Deploying Helm release '${RELEASE_NAME}'"
 
+VERSION_ARGS=()
+if [[ -n "$CHART_VERSION" ]]; then
+  VERSION_ARGS=(--version "$CHART_VERSION")
+  info "Pinning chart version: ${CHART_VERSION}"
+else
+  info "Installing latest available chart version"
+fi
+
 HELM_CMD=(
-  helm upgrade --install "$RELEASE_NAME" $CHART_REF
-  ${VERSION_FLAG:+$VERSION_FLAG}
+  helm upgrade --install "$RELEASE_NAME" "${HELM_REPO_NAME}/balo-cricket"
+  "${VERSION_ARGS[@]}"
   --namespace "$NAMESPACE"
   --create-namespace
   --set "api.secrets.jwtSecret=${JWT_SECRET}"
@@ -263,7 +274,7 @@ HELM_CMD=(
 run "${HELM_CMD[@]}"
 success "Helm release '${RELEASE_NAME}' deployed"
 
-# ── Step 10: Status summary ───────────────────────────────────────────────────
+# ── Step 10: Status summary ────────────────────────────────────────────────────
 step "Deployment summary"
 
 if ! $DRY_RUN; then
@@ -284,4 +295,5 @@ echo -e "    kubectl get all -n ${NAMESPACE}"
 echo -e "    kubectl logs -n ${NAMESPACE} deploy/balo-cricket-frontend"
 echo -e "    kubectl logs -n ${NAMESPACE} deploy/balo-cricket-api"
 echo -e "    helm status ${RELEASE_NAME} -n ${NAMESPACE}"
+echo -e "    helm history ${RELEASE_NAME} -n ${NAMESPACE}"
 echo ""
