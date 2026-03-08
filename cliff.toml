@@ -60,7 +60,7 @@ commit_parsers = [
     { message = "^helm",     group = "⛵ Helm Chart"      },
     { message = "^ci",       group = "👷 CI/CD"           },
     { message = "^chore",    group = "🔧 Chores"          },
-    { message = "^refactor", group = "♻️  Refactors"       },
+    { message = "^refactor", group = "♻️ Refactors"        },
     { message = "^perf",     group = "⚡ Performance"     },
     { message = "^test",     group = "🧪 Tests"           },
     { message = "^style",    group = "🎨 Styling"         },

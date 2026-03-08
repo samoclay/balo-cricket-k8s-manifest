@@ -59,9 +59,15 @@ The **React frontend** calls the API using the `REACT_APP_API_URL` environment v
 │   ├── frontend/
 │   └── api/
 │
+├── CHANGELOG.md                 📋 auto-generated from conventional commits
+├── cliff.toml                   ⚙️  git-cliff config (drives CHANGELOG)
+├── .commitlintrc.yml            📏 conventional commit rules for PRs
+│
 └── .github/workflows/
-    ├── helm-test.yml            🧪 PR validation (lint + schema + image check)
-    └── chart-release.yml        🚀 publishes chart to GitHub Pages on master merge
+    ├── helm-test.yml            🧪 PR: lint + schema + image check
+    ├── chart-release.yml        🚀 master: publish chart + enrich release notes
+    ├── changelog.yml            📋 master: auto-update CHANGELOG.md
+    └── commitlint.yml           📏 PR: validate commit message format
 ```
 
 ---
@@ -319,31 +325,111 @@ kubectl delete namespace balo-cricket
 
 ## 🔄 CI / CD — how the chart is published
 
+Every push to `master` (i.e. every merged PR) triggers this pipeline:
+
 ```
 Feature branch  ──► PR ──► master merge
                      │              │
                      ▼              ▼
-              helm-test.yml    chart-release.yml
-              ─────────────    ─────────────────
-              ① helm lint      ① package chart
-              ② helm template  ② create GitHub Release
-                 + kubeconform    tagged balo-cricket-<ver>
-                 (k8s 1.28+1.30) ③ push index.yaml to gh-pages
-              ③ docker manifest   → Helm repo at
-                 inspect both       github.io/samoclay/
-                 images             balo-cricket-k8s-manifest
+              On every PR:    On every master push:
+              ─────────────   ──────────────────────────────────
+              commitlint.yml  changelog.yml
+              → validates     → git-cliff reads conventional
+                all commit      commits → rewrites CHANGELOG.md
+                messages        → commits back to master
+
+              helm-test.yml   chart-release.yml
+              → helm lint     → if Chart.yaml version bumped:
+              → kubeconform     ① package chart .tgz
+                (k8s 1.28 +     ② create GitHub Release
+                 k8s 1.30)           balo-cricket-<ver>
+              → docker          ③ enrich release notes:
+                manifest            • bundled image versions
+                inspect             • upstream changelogs from
+                (both images)         balo-cricket-react-frontend-ui
+                                      balo-cricket-api
+                                ④ push index.yaml → gh-pages
+                                   (live Helm repo)
 ```
 
-### Bumping the chart version
+### ⬆️ Bumping the chart version
 
-When you merge a feature branch and want to publish a new chart release, bump the `version` field in `helm/balo-cricket/Chart.yaml` **before** merging:
+When you want to publish a new chart release, bump `version` in `helm/balo-cricket/Chart.yaml` **before** merging:
 
 ```yaml
 # helm/balo-cricket/Chart.yaml
-version: 0.2.0    # ← increment this
+version: 0.2.0    # ← increment this (semantic versioning)
 ```
 
-The `chart-release.yml` workflow only publishes a release when it finds a version that doesn't already have a GitHub Release — so merges that don't touch the chart are safe no-ops.
+Commit it as:
+
+```bash
+git commit -m "helm: bump chart version to 0.2.0"
+```
+
+`chart-release.yml` is idempotent — it only creates a GitHub Release when it finds a version that doesn't already have one, so merges that don't touch the chart version are safe no-ops.
+
+### 🏷️ What a GitHub Release looks like
+
+Each chart release at `https://github.com/samoclay/balo-cricket-k8s-manifest/releases` automatically includes:
+
+- 📦 **Bundled image versions** — the exact frontend and API image tags this chart was built with
+- 🎨 **Frontend changelog** — release notes fetched live from `samoclay/balo-cricket-react-frontend-ui`
+- ⚙️ **API changelog** — release notes fetched live from `samoclay/balo-cricket-api`
+- 🔄 **Chart changes** — conventional commits since the previous chart tag
+
+This means every chart release is self-contained and tells you exactly what's inside — no digging through commit history needed.
+
+> 💡 **Why GitHub Releases instead of a RELEASE.md file?**  
+> GitHub Releases are versioned, searchable, and appear directly on the repo homepage.  
+> A `RELEASE.md` file would go stale between versions and only ever show one release at a time.  
+> Use `CHANGELOG.md` for the full commit history and GitHub Releases for user-facing per-version notes.
+
+---
+
+## 📝 Contributing — Conventional Commits
+
+This project uses **[Conventional Commits](https://www.conventionalcommits.org/)** so that the changelog and release notes are generated automatically. Every commit must follow this format:
+
+```
+<type>(<optional scope>): <short description in lowercase>
+
+[optional body]
+
+[optional footer — use BREAKING CHANGE: for breaking changes]
+```
+
+### Commit types
+
+| Type | Emoji | When to use |
+|------|-------|-------------|
+| `feat` | ✨ | A new feature or user-facing capability |
+| `fix` | 🐛 | A bug fix |
+| `docs` | 📚 | Documentation only changes |
+| `helm` | ⛵ | Helm chart changes — values, templates, Chart.yaml version bumps |
+| `ci` | 👷 | CI/CD workflow changes |
+| `chore` | 🔧 | Maintenance, dependency bumps, housekeeping |
+| `refactor` | ♻️ | Code restructure with no behavior change |
+| `perf` | ⚡ | Performance improvements |
+| `test` | 🧪 | Adding or fixing tests |
+| `style` | 🎨 | Formatting / whitespace only |
+| `revert` | ⏪ | Reverts a previous commit |
+
+### Examples
+
+```bash
+feat: add staging environment values overlay
+fix: correct readiness probe path for API container
+helm: bump chart version to 0.2.0
+docs: add AWS deployment section to README
+ci: add trivy image vulnerability scanning
+chore: update NGINX Ingress Controller to v1.12.0
+feat!: rename balo-cricket namespace to cricket    # ⚠️ breaking change
+```
+
+Breaking changes use `!` after the type and will be flagged prominently in the changelog and release notes.
+
+The `commitlint.yml` workflow validates every commit in a PR automatically — it will block the merge if any message doesn't follow the spec.
 
 ---
 
