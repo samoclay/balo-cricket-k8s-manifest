@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local env overrides
+*.env.local
+
+# macOS
+.DS_Store
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
