@@ -1,0 +1,76 @@
+# git-cliff configuration — https://git-cliff.org/docs/configuration
+# Drives the auto-generated CHANGELOG.md via .github/workflows/changelog.yml.
+#
+# Conventional Commit types recognised by this project:
+#
+#   feat      ✨  A new feature
+#   fix       🐛  A bug fix
+#   docs      📚  Documentation only changes
+#   helm      ⛵  Helm chart changes (custom type)
+#   ci        👷  CI/CD pipeline changes
+#   chore     🔧  Maintenance / housekeeping
+#   refactor  ♻️   A code change that neither fixes a bug nor adds a feature
+#   perf      ⚡  A change that improves performance
+#   test      🧪  Adding or correcting tests
+#   style     🎨  Formatting / whitespace (no logic changes)
+#   revert    ⏪  Reverts a previous commit
+#
+# Breaking changes: append `!` after the type, e.g. `feat!: ...`
+# or include `BREAKING CHANGE:` in the commit footer.
+
+[changelog]
+header = """
+# 📋 Changelog
+
+All notable changes to this project are documented here.\
+ Entries are auto-generated from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `master`.
+
+"""
+body = """
+{% if version %}\
+## 🏷️ [{{ version | trim_start_matches(pat="v") }}] — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## 🚧 [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first }}\
+{% if commit.breaking %} ⚠️ **BREAKING CHANGE**{% endif %} \
+([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/samoclay/balo-cricket-k8s-manifest/commit/{{ commit.id }}))\
+{% endfor %}
+{% endfor %}\n
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+
+# Drop commits that don't follow the spec so the changelog stays clean
+filter_unconventional = true
+
+split_commits = false
+
+# Map commit type prefixes → emoji-decorated section headings
+commit_parsers = [
+    { message = "^feat",     group = "✨ Features"       },
+    { message = "^fix",      group = "🐛 Bug Fixes"      },
+    { message = "^docs",     group = "📚 Documentation"  },
+    { message = "^helm",     group = "⛵ Helm Chart"      },
+    { message = "^ci",       group = "👷 CI/CD"           },
+    { message = "^chore",    group = "🔧 Chores"          },
+    { message = "^refactor", group = "♻️  Refactors"       },
+    { message = "^perf",     group = "⚡ Performance"     },
+    { message = "^test",     group = "🧪 Tests"           },
+    { message = "^style",    group = "🎨 Styling"         },
+    { message = "^revert",   group = "⏪ Reverts"         },
+    # Silently skip changelog update commits so they don't appear in the log
+    { message = "^chore: update CHANGELOG", skip = true  },
+]
+
+# Tag pattern used to detect releases (e.g. v0.1.0, v1.0.0)
+tag_pattern = "v[0-9]*"
+
+# Newest commits appear first within each section
+sort_commits = "newest"

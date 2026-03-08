@@ -1,0 +1,45 @@
+name: Conventional Commits
+
+# Validates that every commit in a pull request follows the
+# Conventional Commits specification (https://www.conventionalcommits.org/).
+#
+# Rules are defined in .commitlintrc.yml at the repo root.
+# Recognised types: feat fix docs helm ci chore refactor perf test style revert
+#
+# Examples of valid commit messages:
+#   feat: add helm chart for local dev cluster
+#   fix: correct ingress host annotation
+#   helm: bump chart version to 0.2.0
+#   docs: update getting started section in README
+#   ci: add kubeconform schema validation step
+#   chore: tidy up values.yaml comments
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
+jobs:
+  commitlint:
+    name: Lint Commit Messages
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch enough history to reach the base of the PR
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.yml
+          # Check every commit in the PR, not just the latest
+          failOnWarnings: false
+          helpURL: "https://www.conventionalcommits.org/"

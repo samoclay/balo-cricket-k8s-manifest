@@ -1,0 +1,50 @@
+name: Update Changelog
+
+# Runs on every push to master (including PR merges).
+# Generates CHANGELOG.md from conventional commits using git-cliff,
+# then commits it back to master with a [skip ci] message so it
+# doesn't trigger itself again in a loop.
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  changelog:
+    name: Generate & Commit Changelog
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use GITHUB_TOKEN so the push back to master is authorised
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog with git-cliff
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          # --output writes directly to CHANGELOG.md in the workspace
+          args: --verbose --output CHANGELOG.md
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          OUTPUT: CHANGELOG.md
+
+      - name: Commit and push updated CHANGELOG.md
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          # Only commit when there are actual changes
+          if git diff --staged --quiet; then
+            echo "CHANGELOG.md is already up-to-date — nothing to commit."
+          else
+            git commit -m "chore: update CHANGELOG.md [skip ci]"
+            git push
+          fi
