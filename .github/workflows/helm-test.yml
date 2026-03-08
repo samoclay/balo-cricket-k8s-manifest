@@ -1,0 +1,127 @@
+name: Helm Chart Tests
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "helm/**"
+      - ".github/workflows/helm-test.yml"
+  pull_request:
+    paths:
+      - "helm/**"
+      - ".github/workflows/helm-test.yml"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint — validate chart structure and values
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.14.4"
+
+      - name: Lint chart (strict)
+        run: helm lint helm/balo-cricket --strict
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Template + Schema Validation
+  # Renders every template and validates each manifest against the Kubernetes
+  # API schemas using kubeconform — no running cluster required.
+  # ---------------------------------------------------------------------------
+  validate:
+    name: Template Render & Schema Validation
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Validate against two Kubernetes versions to catch API deprecations
+        k8s-version: ["1.28.0", "1.30.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.14.4"
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Render templates and validate (k8s ${{ matrix.k8s-version }})
+        run: |
+          helm template balo-cricket helm/balo-cricket \
+            --set api.secrets.jwtSecret=test-secret \
+            --set api.secrets.apiKey=test-api-key \
+          | kubeconform \
+              -strict \
+              -summary \
+              -kubernetes-version "${{ matrix.k8s-version }}"
+
+      - name: Render templates with ingress disabled
+        run: |
+          helm template balo-cricket helm/balo-cricket \
+            --set ingress.enabled=false \
+            --set api.secrets.jwtSecret=test-secret \
+            --set api.secrets.apiKey=test-api-key \
+          | kubeconform \
+              -strict \
+              -summary \
+              -kubernetes-version "${{ matrix.k8s-version }}"
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Verify container images exist in GHCR
+  # Uses `docker manifest inspect` which only fetches the image manifest JSON
+  # — no image layers are downloaded, keeping the job fast and lightweight.
+  # Requires a repository secret named GHCR_TOKEN (GitHub PAT with
+  # read:packages scope).
+  # ---------------------------------------------------------------------------
+  verify-images:
+    name: Verify Container Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract image references from chart values
+        id: images
+        run: |
+          python3 - <<'EOF'
+          import yaml, os
+
+          with open("helm/balo-cricket/values.yaml") as f:
+              v = yaml.safe_load(f)
+
+          frontend = v["frontend"]["image"]["repository"] + ":" + v["frontend"]["image"]["tag"]
+          api      = v["api"]["image"]["repository"]      + ":" + v["api"]["image"]["tag"]
+
+          print(f"Frontend image: {frontend}")
+          print(f"API image:      {api}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"frontend={frontend}\n")
+              out.write(f"api={api}\n")
+          EOF
+
+      - name: Verify frontend image exists
+        run: |
+          echo "Checking ${{ steps.images.outputs.frontend }}"
+          docker manifest inspect "${{ steps.images.outputs.frontend }}"
+
+      - name: Verify API image exists
+        run: |
+          echo "Checking ${{ steps.images.outputs.api }}"
+          docker manifest inspect "${{ steps.images.outputs.api }}"

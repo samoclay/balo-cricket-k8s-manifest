@@ -5,16 +5,32 @@ Kubernetes manifests for deploying the Balo Cricket platform — comprising the 
 ## Repository structure
 
 ```
-dev/                          # Local / development environment
-├── namespace.yaml            # balo-cricket namespace
-├── secrets.yaml              # API authentication secrets (template — edit before applying)
-├── ingress.yaml              # Nginx Ingress routing rules
+helm/
+└── balo-cricket/             # Helm chart (preferred deployment method)
+    ├── Chart.yaml
+    ├── values.yaml           # Default values (dev / Docker Desktop)
+    └── templates/
+        ├── namespace.yaml
+        ├── secret.yaml
+        ├── frontend-deployment.yaml
+        ├── frontend-service.yaml
+        ├── api-deployment.yaml
+        ├── api-service.yaml
+        └── ingress.yaml
+
+dev/                          # Raw manifests (quick local reference)
+├── namespace.yaml
+├── secrets.yaml
+├── ingress.yaml
 ├── frontend/
-│   ├── deployment.yaml       # React UI Deployment
-│   └── service.yaml          # React UI ClusterIP Service
+│   ├── deployment.yaml
+│   └── service.yaml
 └── api/
-    ├── deployment.yaml       # Backend API Deployment
-    └── service.yaml          # Backend API ClusterIP Service
+    ├── deployment.yaml
+    └── service.yaml
+
+.github/workflows/
+└── helm-test.yml             # CI: lint · schema validation · image check
 ```
 
 ## Container images
@@ -24,7 +40,19 @@ dev/                          # Local / development environment
 | Frontend  | `ghcr.io/samoclay/balo-cricket-react-frontend-ui:latest` |
 | API       | `ghcr.io/samoclay/balo-cricket-api:latest` |
 
-Both images are hosted in the GitHub Container Registry (GHCR). Update the `image:` field in each deployment if you want to pin to a specific tag.
+Both images are hosted in the GitHub Container Registry (GHCR). The image tags default to `latest`; override `frontend.image.tag` / `api.image.tag` in `values.yaml` (or via `--set`) to pin to a specific version.
+
+## CI — Helm chart tests
+
+The `.github/workflows/helm-test.yml` workflow runs automatically on every push or PR that touches `helm/` or the workflow file itself. It contains three jobs:
+
+| Job | Tool | What it checks |
+|-----|------|----------------|
+| **Helm Lint** | `helm lint --strict` | Chart structure, template syntax, required fields |
+| **Template Render & Schema Validation** | `helm template` + `kubeconform` | All rendered manifests are valid Kubernetes resources (tested against k8s 1.28 and 1.30) |
+| **Verify Container Images** | `docker manifest inspect` | Both GHCR images exist and are accessible — only fetches manifest JSON, no layers downloaded |
+
+> **GHCR_TOKEN secret required** — the *Verify Container Images* job needs a repository secret named `GHCR_TOKEN` set to a GitHub Personal Access Token with `read:packages` scope. Add it at **Settings → Secrets and variables → Actions**.
 
 ## Prerequisites
 
@@ -42,7 +70,11 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 
 ## Deployment
 
-### 1. Add local DNS entries
+### Option A — Helm (recommended)
+
+Helm allows you to override any value without editing files and makes future environment promotion straightforward.
+
+#### 1. Add local DNS entries
 
 Add the following lines to `/etc/hosts` (macOS/Linux) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
 
@@ -51,11 +83,13 @@ Add the following lines to `/etc/hosts` (macOS/Linux) or `C:\Windows\System32\dr
 127.0.0.1  api.balo-cricket.local
 ```
 
-### 2. Create the image pull secret
+#### 2. Create the image pull secret
 
 The images are stored in GHCR and require a GitHub Personal Access Token (PAT) with `read:packages` scope.
 
 ```bash
+kubectl create namespace balo-cricket
+
 kubectl create secret docker-registry ghcr-pull-secret \
   --namespace=balo-cricket \
   --docker-server=ghcr.io \
@@ -64,13 +98,39 @@ kubectl create secret docker-registry ghcr-pull-secret \
   --docker-email=<your-email>
 ```
 
-### 3. Update the API secrets
+#### 3. Install the chart
 
-Edit `dev/secrets.yaml` and replace the placeholder values for `JWT_SECRET` and `API_KEY` with real values **before** applying.
+```bash
+helm install balo-cricket helm/balo-cricket \
+  --namespace balo-cricket \
+  --set api.secrets.jwtSecret=<your-jwt-secret> \
+  --set api.secrets.apiKey=<your-api-key>
+```
 
-> **Note:** Do not commit real secret values. Consider using `kubectl create secret` directly or a secrets manager for sensitive data.
+To pin specific image versions instead of `latest`:
 
-### 4. Apply manifests
+```bash
+helm install balo-cricket helm/balo-cricket \
+  --namespace balo-cricket \
+  --set frontend.image.tag=1.2.3 \
+  --set api.image.tag=2.0.1 \
+  --set api.secrets.jwtSecret=<your-jwt-secret> \
+  --set api.secrets.apiKey=<your-api-key>
+```
+
+#### 4. Verify and access
+
+```bash
+kubectl get all -n balo-cricket
+kubectl get ingress -n balo-cricket
+```
+
+* **Frontend:** http://balo-cricket.local
+* **API:** http://api.balo-cricket.local
+
+---
+
+### Option B — Raw manifests (quick local reference)
 
 ```bash
 # Create namespace first

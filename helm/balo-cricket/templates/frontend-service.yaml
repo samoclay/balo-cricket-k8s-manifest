@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: balo-cricket-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "balo-cricket.frontend.selectorLabels" . | nindent 4 }}
+    {{- include "balo-cricket.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "balo-cricket.frontend.selectorLabels" . | nindent 4 }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.frontend.service.port }}
+      targetPort: {{ .Values.frontend.service.targetPort }}
+  type: ClusterIP
