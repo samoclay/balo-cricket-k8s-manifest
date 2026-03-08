@@ -18,6 +18,8 @@ jobs:
   lint:
     name: Helm Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +39,8 @@ jobs:
   validate:
     name: Template Render & Schema Validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         # Validate against two Kubernetes versions to catch API deprecations
@@ -86,6 +90,9 @@ jobs:
   verify-images:
     name: Verify Container Images
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
